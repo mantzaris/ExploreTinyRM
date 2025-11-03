@@ -408,7 +408,6 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-from tsp_data import decode_coords, distance_matrix, tour_length_from_successors
 
 ArrayLike1D = Union[np.ndarray, torch.Tensor, Sequence[int]]
 
