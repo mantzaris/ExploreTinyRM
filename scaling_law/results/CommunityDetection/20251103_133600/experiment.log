@@ -1,0 +1,27 @@
+INFO:root:Experiment started at 2025-11-03T13:36:00.232324
+INFO:root:Config: {"N_NODES": 5, "N_COMMUNITIES": 2, "INPUT_TOKENS": 2, "OUTPUT_TOKENS": 2, "SEQ_LEN": 25, "D_MODEL": 64, "N_SUP": 16, "N": 6, "T": 3, "USE_ATT": false, "N_LAYERS": 2}
+INFO:root:Epoch 0: train_acc=None, val_acc=0.6488281488418579
+INFO:root:Epoch 1: train_acc=0.9925720222527161, val_acc=1.0
+INFO:root:Epoch 2: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 3: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 4: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 5: train_acc=1.0, val_acc=1.0
+INFO:root:Experiment started at 2025-11-03T13:41:14.370103
+INFO:root:Config: {"N_NODES": 10, "N_COMMUNITIES": 2, "INPUT_TOKENS": 2, "OUTPUT_TOKENS": 2, "SEQ_LEN": 100, "D_MODEL": 128, "N_SUP": 16, "N": 6, "T": 3, "USE_ATT": false, "N_LAYERS": 2}
+INFO:root:Epoch 0: train_acc=None, val_acc=0.46445316076278687
+INFO:root:Epoch 1: train_acc=0.9913024903944461, val_acc=1.0
+INFO:root:Epoch 2: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 3: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 4: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 5: train_acc=1.0, val_acc=1.0
+INFO:root:Experiment started at 2025-11-03T13:46:44.629652
+INFO:root:Config: {"N_NODES": 20, "N_COMMUNITIES": 3, "INPUT_TOKENS": 2, "OUTPUT_TOKENS": 3, "SEQ_LEN": 400, "D_MODEL": 256, "N_SUP": 16, "N": 6, "T": 3, "USE_ATT": false, "N_LAYERS": 4}
+INFO:root:Epoch 0: train_acc=None, val_acc=0.3499999940395355
+INFO:root:Epoch 1: train_acc=0.9729171762883198, val_acc=1.0
+INFO:root:Epoch 2: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 3: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 4: train_acc=1.0, val_acc=1.0
+INFO:root:Epoch 5: train_acc=1.0, val_acc=1.0
+INFO:root:Experiment started at 2025-11-03T15:39:40.420039
+INFO:root:Config: {"N_NODES": 30, "N_COMMUNITIES": 4, "INPUT_TOKENS": 2, "OUTPUT_TOKENS": 4, "SEQ_LEN": 900, "D_MODEL": 512, "N_SUP": 16, "N": 6, "T": 3, "USE_ATT": false, "N_LAYERS": 6}
+INFO:root:Epoch 0: train_acc=None, val_acc=0.23300783336162567

@@ -1,0 +1,13 @@
+{
+  "N_NODES": 10,
+  "N_COMMUNITIES": 2,
+  "INPUT_TOKENS": 2,
+  "OUTPUT_TOKENS": 2,
+  "SEQ_LEN": 100,
+  "D_MODEL": 128,
+  "N_SUP": 16,
+  "N": 6,
+  "T": 3,
+  "USE_ATT": false,
+  "N_LAYERS": 2
+}
