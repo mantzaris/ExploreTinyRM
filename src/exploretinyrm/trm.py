@@ -412,9 +412,10 @@ class TRM(nn.Module):
         # Heads
         if self.cfg.use_pointer_output:
             # candidates can be x_h (simple and effective for TSP)
-            logits = self.pointer_head(y, x_h)     # [B, L, L]
+            logits = self.pointer_head(y, x_h, y_state=y)     # [B, L, L]
         else:
             logits = self.output_head(y)           # [B, L, V]
+            
         halt_logit = self.halt_head(y)             # [B]
 
         # detach states before returning (deep supervision step carries detached states)
@@ -457,11 +458,8 @@ class TRM(nn.Module):
 ##### DIFFERENT APPROACH NEEDED FOR PROBLEMS LIKE TSP
 
 # in trm.py
+# PointerOutputHead
 class PointerOutputHead(nn.Module):
-    """
-    Content-based pointer head: logits[i, j] = <q(y_i), W k(c_j)> / sqrt(D)
-    where c_j is a candidate representation (e.g., from x or y or x+y+z).
-    """
     def __init__(self, d_model: int, bilinear: bool = True):
         super().__init__()
         self.norm_q = RMSNorm(d_model)
@@ -470,15 +468,21 @@ class PointerOutputHead(nn.Module):
         if bilinear:
             self.W = nn.Parameter(torch.empty(d_model, d_model))
             nn.init.xavier_uniform_(self.W)
+        # learnable mix of candidates
+        self.beta_y = nn.Parameter(torch.tensor(0.0))
 
-    def forward(self, y: torch.Tensor, candidates: torch.Tensor) -> torch.Tensor:
-        # y: [B, L, D] (queries); candidates: [B, L, D] (keys)
-        q = self.norm_q(y)              # [B, L, D]
-        k = self.norm_k(candidates)     # [B, L, D]
+    def forward(
+        self,
+        y: torch.Tensor,          # [B, L, D] queries
+        x_h: torch.Tensor,        # [B, L, D] geometric content
+        y_state: torch.Tensor | None = None  # [B, L, D] optional
+    ) -> torch.Tensor:
+        q = self.norm_q(y)
+        k_in = x_h if y_state is None else (x_h + self.beta_y * y_state)
+        k = self.norm_k(k_in)
         if self.bilinear:
-            # [B, L, D] x [D, D] -> [B, L, D]; then [B, L, D] @ [B, D, L] -> [B, L, L]
-            qW = torch.einsum('bld,dk->blk', q, self.W)
-            logits = torch.einsum('blk,bmk->blm', qW, k)
+            qW = torch.einsum("bld,dk->blk", q, self.W)
+            logits = torch.einsum("blk,bmk->blm", qW, k)  # [B, L, L]
         else:
-            logits = torch.einsum('bld,bmd->blm', q, k)
+            logits = torch.einsum("bld,bmd->blm", q, k)    # [B, L, L]
         return logits / math.sqrt(q.size(-1))
