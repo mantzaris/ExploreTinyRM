@@ -229,6 +229,9 @@ class TRMConfig:
     # if None, backpropagate through all (n + 1) calls
     k_last_ops: Optional[int] = None
     stabilize_input_sums: bool = True
+    
+    use_pointer_output: bool = False  # set True for TSP
+    
 
 
 class OutputHead(nn.Module):
@@ -301,8 +304,15 @@ class TRM(nn.Module):
             mlp_ratio=cfg.mlp_ratio,
             token_mlp_ratio=cfg.token_mlp_ratio,
         )
-        self.output_head = OutputHead(cfg.d_model, cfg.output_vocab_size)
         self.halt_head = HaltHead(cfg.d_model)
+
+        if cfg.use_pointer_output:
+            self.pointer_head = PointerOutputHead(cfg.d_model)  # defined elsewhere
+            self.output_head = None
+        else:
+            self.output_head = OutputHead(cfg.d_model, cfg.output_vocab_size)
+            self.pointer_head = None
+            
 
     # state helpers
 
@@ -385,7 +395,7 @@ class TRM(nn.Module):
           - Final loop with gradients (backprop through the full recursion process of n z-updates + 1 y-update; optionally truncated via k_last_ops)
         returns:
           - y_next, z_next: detached states to be used as initialization for the next supervision step
-          - logits: token logits from output head applied on y (reverse embedding)
+          - logits: token logits; pointer head if use_pointer_output else reverse embedding
           - halt_logit: scalar logit per example for halting (single-pass ACT)
         """
         n = self.cfg.n if n is None else n
@@ -398,10 +408,14 @@ class TRM(nn.Module):
 
         # Final loop with gradients; optionally backprop only through the last k ops
         y, z = self.latent_recursion(x_h, y, z, n=n, k_last_ops=k_last_ops, track_grads=True)
-
-        # Heads (use current y)
-        logits = self.output_head(y)             # [B, L, V]
-        halt_logit = self.halt_head(y)           # [B]
+        
+        # Heads
+        if self.cfg.use_pointer_output:
+            # candidates can be x_h (simple and effective for TSP)
+            logits = self.pointer_head(y, x_h)     # [B, L, L]
+        else:
+            logits = self.output_head(y)           # [B, L, V]
+        halt_logit = self.halt_head(y)             # [B]
 
         # detach states before returning (deep supervision step carries detached states)
         return y.detach(), z.detach(), logits, halt_logit
@@ -435,3 +449,36 @@ class TRM(nn.Module):
         if (y is None) or (z is None):
             y, z = self.init_state(batch_size=x_tokens.size(0), device=x_tokens.device)
         return self.deep_recursion(x_h, y, z, n=n, T=T, k_last_ops=k_last_ops)
+
+
+
+
+#####################################################
+##### DIFFERENT APPROACH NEEDED FOR PROBLEMS LIKE TSP
+
+# in trm.py
+class PointerOutputHead(nn.Module):
+    """
+    Content-based pointer head: logits[i, j] = <q(y_i), W k(c_j)> / sqrt(D)
+    where c_j is a candidate representation (e.g., from x or y or x+y+z).
+    """
+    def __init__(self, d_model: int, bilinear: bool = True):
+        super().__init__()
+        self.norm_q = RMSNorm(d_model)
+        self.norm_k = RMSNorm(d_model)
+        self.bilinear = bilinear
+        if bilinear:
+            self.W = nn.Parameter(torch.empty(d_model, d_model))
+            nn.init.xavier_uniform_(self.W)
+
+    def forward(self, y: torch.Tensor, candidates: torch.Tensor) -> torch.Tensor:
+        # y: [B, L, D] (queries); candidates: [B, L, D] (keys)
+        q = self.norm_q(y)              # [B, L, D]
+        k = self.norm_k(candidates)     # [B, L, D]
+        if self.bilinear:
+            # [B, L, D] x [D, D] -> [B, L, D]; then [B, L, D] @ [B, D, L] -> [B, L, L]
+            qW = torch.einsum('bld,dk->blk', q, self.W)
+            logits = torch.einsum('blk,bmk->blm', qW, k)
+        else:
+            logits = torch.einsum('bld,bmd->blm', q, k)
+        return logits / math.sqrt(q.size(-1))
