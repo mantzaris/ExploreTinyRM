@@ -25,7 +25,7 @@ class RMSNorm(nn.Module):
         # Fast path: fused functional in PyTorch 2.9
         if hasattr(F, "rms_norm"):
             # normalize over last dim; use your existing learned scale
-            return F.rms_norm(x, self.weight.shape, weight=self.weight, eps=self.eps)
+            F.rms_norm(x, (self.weight.numel(),), weight=self.weight, eps=self.eps) #return F.rms_norm(x, self.weight.shape, weight=self.weight, eps=self.eps)
 
         # Fallback: AMP-safe stats in float32, then cast back
         orig_dtype = x.dtype
