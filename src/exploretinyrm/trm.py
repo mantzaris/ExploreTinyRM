@@ -25,7 +25,8 @@ class RMSNorm(nn.Module):
         # Fast path: fused functional in PyTorch 2.9
         if hasattr(F, "rms_norm"):
             # normalize over last dim; use your existing learned scale
-            F.rms_norm(x, (self.weight.numel(),), weight=self.weight, eps=self.eps) #return F.rms_norm(x, self.weight.shape, weight=self.weight, eps=self.eps)
+            return F.rms_norm(x, (x.shape[-1],), weight=self.weight, eps=self.eps)
+
 
         # Fallback: AMP-safe stats in float32, then cast back
         orig_dtype = x.dtype
@@ -230,7 +231,8 @@ class TRMConfig:
     k_last_ops: Optional[int] = None
     stabilize_input_sums: bool = True
     
-    use_pointer_output: bool = False  # set True for TSP
+    use_pointer_output: bool = False  # set True for TSP; city->successor
+    use_order_assignment: bool = False  # NEW: position->city
     
 
 
@@ -306,8 +308,12 @@ class TRM(nn.Module):
         )
         self.halt_head = HaltHead(cfg.d_model)
 
-        if cfg.use_pointer_output:
-            self.pointer_head = PointerOutputHead(cfg.d_model)  # defined elsewhere
+        if cfg.use_order_assignment:
+            self.order_head = PositionAssignmentHead(cfg.d_model, cfg.seq_len, bilinear=True)
+            self.output_head = None
+            self.pointer_head = None
+        elif cfg.use_pointer_output:
+            self.pointer_head = PointerOutputHead(cfg.d_model)
             self.output_head = None
         else:
             self.output_head = OutputHead(cfg.d_model, cfg.output_vocab_size)
@@ -410,15 +416,15 @@ class TRM(nn.Module):
         y, z = self.latent_recursion(x_h, y, z, n=n, k_last_ops=k_last_ops, track_grads=True)
         
         # Heads
-        if self.cfg.use_pointer_output:
-            # candidates can be x_h (simple and effective for TSP)
-            logits = self.pointer_head(y, x_h, y_state=y)     # [B, L, L]
+        if self.cfg.use_order_assignment:
+            logits = self.order_head(y, x_h)         # [B, L, L], row=position, col=city
+        elif self.cfg.use_pointer_output:
+            logits = self.pointer_head(y, x_h, y_state=y)  # legacy city->successor
         else:
-            logits = self.output_head(y)           # [B, L, V]
-            
-        halt_logit = self.halt_head(y)             # [B]
-
-        # detach states before returning (deep supervision step carries detached states)
+            logits = self.output_head(y)
+        
+        halt_logit = self.halt_head(y)
+        
         return y.detach(), z.detach(), logits, halt_logit
 
     #public APIs
@@ -486,3 +492,40 @@ class PointerOutputHead(nn.Module):
         else:
             logits = torch.einsum("bld,bmd->blm", q, k)    # [B, L, L]
         return logits / math.sqrt(q.size(-1))
+
+
+
+
+
+class PositionAssignmentHead(nn.Module):
+    """
+    Produces position->city logits: row t chooses which city occupies position t.
+    Queries are learned position embeddings; keys come from city-conditioned features.
+    """
+    def __init__(self, d_model: int, seq_len: int, bilinear: bool = True):
+        super().__init__()
+        self.pos_q = nn.Parameter(torch.empty(seq_len, d_model))
+        nn.init.normal_(self.pos_q, std=1.0 / math.sqrt(d_model))
+        self.norm_q = RMSNorm(d_model)
+        self.norm_k = RMSNorm(d_model)
+        self.bilinear = bilinear
+        if bilinear:
+            self.W = nn.Parameter(torch.empty(d_model, d_model))
+            nn.init.xavier_uniform_(self.W)
+        self.beta_y = nn.Parameter(torch.tensor(1.0))  # mix in y-state as keys if helpful
+
+    def forward(self, y: torch.Tensor, x_h: torch.Tensor) -> torch.Tensor:
+        # y: [B, L, D] latent state per city; x_h: [B, L, D] city embeddings
+        B, L, D = x_h.shape
+        q = self.pos_q.unsqueeze(0).expand(B, L, D)  # [B, L, D]
+        q = self.norm_q(q)
+        k_in = x_h + self.beta_y * y
+        k = self.norm_k(k_in)
+        if self.bilinear:
+            qW = torch.einsum("bld,dk->blk", q, self.W)
+            logits = torch.einsum("blk,bmk->blm", qW, k)  # [B, L, L]
+        else:
+            logits = torch.einsum("bld,bmd->blm", q, k)
+        return logits / math.sqrt(D)
+
+
