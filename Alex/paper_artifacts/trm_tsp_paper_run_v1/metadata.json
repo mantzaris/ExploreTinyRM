@@ -1,0 +1,28 @@
+{
+  "experiment_name": "trm_tsp_paper_run_v1",
+  "timestamp_unix": 1765658533,
+  "python_version": "3.12.3",
+  "pytorch_version": "2.9.0+cu128",
+  "numpy_version": "2.3.4",
+  "device": "cuda",
+  "git_commit": "14b5450d769f3dc1230865a6e82cddd140eeedfa",
+  "hyperparameters": {
+    "MAX_CITIES": 12,
+    "D_MODEL": 192,
+    "N_HEADS": 6,
+    "N_LAYERS": 2,
+    "INNER_Z_UPDATES": 6,
+    "DEEP_RECURSIONS": 3,
+    "K_LAST_OPS": null,
+    "OUTER_STEPS": 6,
+    "OUTER_GRAD_STEPS_INSERT": 2,
+    "OUTER_GRAD_STEPS_TWO_OPT": 1,
+    "LEARNING_RATE": 0.0003,
+    "WEIGHT_DECAY": 0.0,
+    "EPOCHS_INSERT": 15,
+    "EPOCHS_TWO_OPT": 15,
+    "BATCH_SIZE_INSERT": 128,
+    "BATCH_SIZE_TWO_OPT": 32,
+    "USE_AMP": true
+  }
+}
